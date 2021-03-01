@@ -29,21 +29,27 @@ const int KPressRate = 10;
 
 // variable to store the HANDLE to the hook. Don't declare it anywhere else then globally
 // or you will get problems since every function uses this variable.
-HHOOK _hook;
-clock_t start, finish;
-double during;
-DWORD last_code = 0;
+HHOOK _keyboardHook;
+clock_t keyboardStart, keyboardFinish;
+double keyboardDuring;
+DWORD keyboard_last_code = 0;
+double keyboard_delay_time = 100.0;
 
-double delay_time = 100.0;
-
+HHOOK _msHook;
+clock_t msStart, msFinish;
+double msDuring;
+DWORD ms_last_code = 0;
+double ms_delay_time = 100.0;
 
 
 // This struct contains the data received by the hook callback. As you see in the callback function
 // it contains the thing you will need: vkCode = virtual key code.
 KBDLLHOOKSTRUCT kbdStruct;
 
+MSLLHOOKSTRUCT msStruct;
+
 void ReleaseHook() {
-    UnhookWindowsHookEx(_hook);
+    UnhookWindowsHookEx(_keyboardHook);
 }
 
 // This is the callback function. Consider it the event that is raised when, in this case,
@@ -59,20 +65,53 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
             kbdStruct = *((KBDLLHOOKSTRUCT*)lParam);
             // a key (non-system) is pressed.
             //cout << kbdStruct.vkCode << endl;
-            finish  = clock();
-            during = double(finish - start);
-            if (during < delay_time && kbdStruct.vkCode == last_code) {
-                cout << "Repeat key : 0x" << hex << last_code << "! Deny!" << endl;
+            keyboardFinish  = clock();
+            keyboardDuring = double(keyboardFinish - keyboardStart);
+            if (keyboardDuring < keyboard_delay_time && kbdStruct.vkCode == keyboard_last_code) {
+                cout << "Repeat keyboard key : 0x" << hex << keyboard_last_code << "! Deny!" << endl;
                 return 1;
             }
-            start = clock();
-            last_code = kbdStruct.vkCode;
+            keyboardStart = clock();
+            keyboard_last_code = kbdStruct.vkCode;
         }
     }
 
 
     // call the next hook in the hook chain. This is nessecary or your hook chain will break and the hook stops
-    return CallNextHookEx(_hook, nCode, wParam, lParam);
+    return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
+}
+
+// This is the callback function. Consider it the event that is raised when, in this case,
+// a key is pressed.
+//LRESULT __stdcall HookCallback(int nCode, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
+
+{
+    if (nCode >= 0) {
+        // the action is valid: HC_ACTION.
+        if (wParam == WM_LBUTTONDOWN ) {
+            // lParam is the pointer to the struct containing the data needed, so cast and assign it to kdbStruct.
+            msStruct = *((MSLLHOOKSTRUCT*)lParam);
+            // a key (non-system) is pressed.
+            //cout << kbdStruct.vkCode << endl;
+            msFinish  = clock();
+            msDuring = double(msFinish - msStart);
+            if (msDuring < ms_delay_time 
+            // && msStruct.vkCode == last_code
+            ) 
+            {
+                // cout << "Repeat mouse key : 0x" << hex << last_code << "! Deny!" << endl;
+                cout << "Repeat mouse key! Deny!" << endl;
+                return 1;
+            }
+            msStart = clock();
+            // last_code = kbdStruct.vkCode;
+        }
+    }
+
+
+    // call the next hook in the hook chain. This is nessecary or your hook chain will break and the hook stops
+    return CallNextHookEx(_msHook, nCode, wParam, lParam);
 }
 
 void SetHook() {
@@ -81,22 +120,27 @@ void SetHook() {
     // The last 2 parameters are NULL, 0 because the callback function is in the same thread and window as the
     // function that sets and releases the hook. If you create a hack you will not need the callback function
     // in another place then your own code file anyway. Read more about it at MSDN.
-    if (!(_hook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0))) {
-        MessageBox(NULL, "Failed to install hook!", "Error", MB_ICONERROR);
+    if (!(_keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0))) {
+        MessageBox(NULL, "Failed to install keyboard hook!", "Error", MB_ICONERROR);
+    }
+    
+    if (!(_msHook = SetWindowsHookEx(WH_MOUSE_LL, MouseProc, NULL, 0))) {
+        MessageBox(NULL, "Failed to install mouse hook!", "Error", MB_ICONERROR);
     }
 }
 
-
-
 int main() {
-    start = clock();
+    keyboardStart = clock();
+    msStart = clock();
     if (KPressRate <= 0) {
         cout << "击键设置有误" << endl;
         return -1;
     }
-    delay_time = double(1000 / KPressRate);
+    keyboard_delay_time = double(1000 / KPressRate);
+    ms_delay_time = double(1000 / KPressRate);
 
-    cout << "会尝试屏蔽时间间隔小于 " << delay_time << " 毫秒的重复击键。" << endl;
+    cout << "Filter keyboard input less than " << keyboard_delay_time << " ms" << endl;
+    cout << "Filter mouse input less than " << ms_delay_time << " ms" << endl;
 
     // Set the hook
     SetHook();
@@ -112,3 +156,4 @@ int main() {
     //{
     //}
 }
+
